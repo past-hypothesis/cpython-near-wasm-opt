@@ -31,16 +31,8 @@ jobs:
       env:
         CPYTHON_NEAR_VERSION: "v3.13.5-near"
         BINARYEN_VERSION: "123"
-      run: |
-        # Override platform detection
-        if [ "${{ matrix.platform }}" = "linux" ]; then
-          python -c "import platform; platform.system = lambda: 'Linux'"
-        elif [ "${{ matrix.platform }}" = "macos" ]; then
-          python -c "import platform; platform.system = lambda: 'Darwin'"
-        elif [ "${{ matrix.platform }}" = "windows" ]; then
-          python -c "import platform; platform.system = lambda: 'Windows'"
-        fi
-        
+        BUILD_PLATFORM: ${{ matrix.platform }}
+      run: |        
         # Create platform-specific wheel
         PLATFORM_TAG=""
         if [ "${{ matrix.platform }}" = "linux" ]; then
