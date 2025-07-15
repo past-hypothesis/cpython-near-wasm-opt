@@ -1,0 +1,89 @@
+name: Build and Publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux, macos, windows]
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+    
+    - name: Install build dependencies
+      run: |
+        uv pip install --system build requests
+    
+    - name: Build wheel for ${{ matrix.platform }}
+      env:
+        CPYTHON_NEAR_VERSION: "v3.13.5-near"
+        BINARYEN_VERSION: "123"
+      run: |
+        # Override platform detection
+        if [ "${{ matrix.platform }}" = "linux" ]; then
+          python -c "import platform; platform.system = lambda: 'Linux'"
+        elif [ "${{ matrix.platform }}" = "macos" ]; then
+          python -c "import platform; platform.system = lambda: 'Darwin'"
+        elif [ "${{ matrix.platform }}" = "windows" ]; then
+          python -c "import platform; platform.system = lambda: 'Windows'"
+        fi
+        
+        # Create platform-specific wheel
+        PLATFORM_TAG=""
+        if [ "${{ matrix.platform }}" = "linux" ]; then
+          PLATFORM_TAG="linux_x86_64"
+        elif [ "${{ matrix.platform }}" = "macos" ]; then
+          PLATFORM_TAG="macosx_10_9_x86_64"
+        elif [ "${{ matrix.platform }}" = "windows" ]; then
+          PLATFORM_TAG="win_amd64"
+        fi
+        
+        python -m build --wheel
+        
+        # Rename wheel to include platform tag
+        cd dist
+        for wheel in *.whl; do
+          if [[ $wheel != *"$PLATFORM_TAG"* ]]; then
+            new_name=$(echo $wheel | sed "s/py3-none-any/py3-none-$PLATFORM_TAG/")
+            mv "$wheel" "$new_name"
+          fi
+        done
+    
+    - name: Upload wheel artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheel-${{ matrix.platform }}
+        path: dist/*.whl
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    environment: pypi
+    permissions:
+      id-token: write    
+    steps:
+    - name: Download all wheel artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist
+        pattern: wheel-*
+        merge-multiple: true
+    
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages_dir: dist/
