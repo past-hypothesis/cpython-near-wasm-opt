@@ -38,7 +38,7 @@ jobs:
         # Create platform-specific wheel
         PLATFORM_TAG=""
         if [ "${{ matrix.platform }}" = "linux" ]; then
-          PLATFORM_TAG="linux_x86_64"
+          PLATFORM_TAG="manylinux1_x86_64"
         elif [ "${{ matrix.platform }}" = "macos" ]; then
           PLATFORM_TAG="macosx_10_9_x86_64"
         elif [ "${{ matrix.platform }}" = "windows" ]; then
