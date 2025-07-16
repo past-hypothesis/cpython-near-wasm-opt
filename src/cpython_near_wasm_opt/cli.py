@@ -29,7 +29,7 @@ Optimizations:
 
 from pathlib import Path
 import argparse
-from .core import optimize_wasm_file, BINARY_PATH
+from .core import optimize_wasm_file, BINARY_PATH, LIB_PATH
 
 def resolve_defaults(args):
     # defaults by optimization level: [module_tracing, function_tracing, compression, debug_info]
@@ -50,10 +50,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.strip(), formatter_class=argparse.RawDescriptionHelpFormatter)
     
     parser.add_argument('build_dir', nargs='?', default='build', help='Build directory (default: build)')
-    parser.add_argument('-i', '--input-file', default=BINARY_PATH / 'python.wasm', help='Input WASM file name (default: embedded python.wasm)')
+    parser.add_argument('-i', '--input-file', default=LIB_PATH / 'python.wasm', help='Input WASM file name (default: embedded python.wasm)')
     parser.add_argument('-o', '--output-file', default='python-optimized.wasm', help='Output WASM file name (default: python-optimized.wasm)')
     parser.add_argument('-l', '--user-lib-dir', default='lib', help='User Python library directory (default: lib)')
-    parser.add_argument('--python-stdlib-zip', default=BINARY_PATH / 'python-stdlib.zip', help='Python standard library zip (default: embedded python-stdlib.zip)')
+    parser.add_argument('--python-stdlib-zip', default=LIB_PATH / 'python-stdlib.zip', help='Python standard library zip (default: embedded python-stdlib.zip)')
     parser.add_argument('-O', '--opt-level', type=int, default=3, choices=[0,1,2,3,4], help='Optimization level 0-4 (default: 3)')
     
     def bool_arg(v):

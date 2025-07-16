@@ -13,6 +13,7 @@ import shutil
 import platform
 
 BINARY_PATH = Path(__file__).parent / "bin"
+LIB_PATH = Path(__file__).parent / "lib"
     
 DEFAULT_PINNED_FUNCTIONS = ["_Py_Dealloc", "PyObject_ClearWeakRefs", "PyObject_ClearManagedDict", "clear_inline_values",
                             "is_basic_ref_or_proxy", "_PyWeakref_GetWeakrefCount", "set_len", "_weakref__remove_dead_weakref",
@@ -899,9 +900,9 @@ def run_tool(tool_name, args):
     print(f"running {' '.join([str(c) for c in cmd])}")
     return subprocess.run(cmd, text=True, check=True)
 
-def optimize_wasm_file(build_dir="build", input_file=BINARY_PATH / "python.wasm", output_file="python-optimized.wasm", 
+def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", output_file="python-optimized.wasm", 
                        module_opt=True, function_opt="aggressive", compression=True, debug_info=True, 
-                       pinned_functions=[], user_lib_dir = "lib", stdlib_zip=BINARY_PATH / "python-stdlib.zip", 
+                       pinned_functions=[], user_lib_dir = "lib", stdlib_zip=LIB_PATH / "python-stdlib.zip", 
                        contract_exports=[], verify_optimized_wasm=True):
     build_path = Path(build_dir)
     wasm_path = Path(input_file)
@@ -1051,3 +1052,4 @@ def optimize_wasm_file(build_dir="build", input_file=BINARY_PATH / "python.wasm"
     
     print(f"copying optimized WASM to {Path(output_file).absolute()}")
     shutil.copy(final_wasm_path, Path(output_file).absolute())
+

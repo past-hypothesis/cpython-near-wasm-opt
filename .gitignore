@@ -1,5 +1,7 @@
 .venv/
 build/
 lib/
-src/bin/
+src/cpython_near_wasm_opt/bin/
+src/cpython_near_wasm_opt/lib/
+src/cpython_near_wasm_opt.egg-info/
 *.wasm

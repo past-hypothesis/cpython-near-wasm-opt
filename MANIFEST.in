@@ -1,3 +1,4 @@
 include README.md
 include LICENSE
 recursive-include src/cpython_near_wasm_opt/bin *
+recursive-include src/cpython_near_wasm_opt/lib *
