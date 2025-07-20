@@ -9,6 +9,7 @@ import sys
 import lz4.frame
 import ast
 import json
+import itertools
 import shutil
 import platform
 
@@ -580,17 +581,17 @@ class WasmRunner:
         }
         return env_imports
 
-def trace_wasm(wasm_runner: WasmRunner, entry_points: dict) -> tuple[set[int], set[str]]:
-    for entry_point in entry_points.keys():
-        [entry_point_module, entry_point_name] = entry_point.rsplit('.', 1)
-        # test_inputs = entry_points[entry_point] if len(entry_points[entry_point]) > 0 else [b'{"key1": "value1", "key2": true, "key3": false, "key4": -20000.00001, "key5": 100000000}']
-        test_inputs = entry_points[entry_point] if len(entry_points[entry_point]) > 0 else [b'{}']
+def trace_wasm(wasm_runner: WasmRunner, entry_points: list, entry_point_test_inputs: dict) -> tuple[set[int], set[str]]:
+    for entry_point in entry_points:
+        test_inputs = entry_point_test_inputs.get(entry_point, [])
+        if len(test_inputs) == 0:
+            test_inputs.append(b'')
         for input_bytes in test_inputs:
-            print(f"running method {entry_point_name}({input_bytes})")
+            print(f"running method {entry_point}({input_bytes})")
             wasm_runner.set_input_bytes(input_bytes)
-            entry_point = wasm_runner.export(entry_point_name)
+            entry_point_export = wasm_runner.export(entry_point)
             try:
-                entry_point()
+                entry_point_export()
             except Exception as e:
                 print(f"trace_wasm(): exception {e}")
             wasm_runner.reset()
@@ -781,14 +782,13 @@ class WasmDataStore:
         return modified_wat
         
     
-def add_contract_entry_points_to_wat(wat, wasm_data: WasmDataStore, entry_points):
+def add_contract_entry_points_to_wat(wat, wasm_data: WasmDataStore, contract_module_name, entry_points):
     modified_wat = wat.copy()
-    for entry_point in entry_points:
-        [module_name, func_name] = entry_point.rsplit('.', 1) if '.' in entry_point else ['contract', entry_point]
-        module_name_address = wasm_data.allocate_string(module_name)
+    for func_name in entry_points:
+        module_name_address = wasm_data.allocate_string(contract_module_name)
         func_name_address = wasm_data.allocate_string(func_name)
-        modified_wat.append(["export", f'"{func_name}"', ["func", f"${module_name}_{func_name}"]])
-        modified_wat.append(["func", f"${module_name}_{func_name}", 
+        modified_wat.append(["export", f'"{func_name}"', ["func", f"${contract_module_name}_{func_name}"]])
+        modified_wat.append(["func", f"${contract_module_name}_{func_name}", 
                              ["call", "$contract_entry_point", ["i32.const", module_name_address], ["i32.const", func_name_address]]])
     return modified_wat
 
@@ -810,9 +810,9 @@ def compile_to_bytecode(wasm_runner: WasmRunner, wasm_data: WasmDataStore, sourc
     return bytes(data_ptr[bytecode_ptr:bytecode_ptr + bytecode_len]);
 
 def should_include_lib_path(pinned_module_paths, path: str):
-    return (pinned_module_paths is None or path in pinned_module_paths)
+    return "__pycache__" not in path and (pinned_module_paths is None or path in pinned_module_paths)
 
-def add_frozen_modules(wasm_data: WasmDataStore, pinned_module_paths, stdlib_zip_path, user_lib_path):
+def add_frozen_modules(wasm_data: WasmDataStore, pinned_module_paths, contract_pyc_path, stdlib_zip_path, user_lib_path):
     with zipfile.ZipFile(stdlib_zip_path, 'r') as zip_file:
         for info in zip_file.infolist():
             frozen_path = info.filename.lstrip('/')
@@ -824,8 +824,11 @@ def add_frozen_modules(wasm_data: WasmDataStore, pinned_module_paths, stdlib_zip
             print(f"add_frozen_modules_from_dir(): including {path}, rel_path: {frozen_path}")
             with open(path, "rb") as f:
                 wasm_data.add_frozen_module(frozen_path, f.read())
+    if contract_pyc_path:
+        with open(path, "rb") as f:
+            wasm_data.add_frozen_module(contract_pyc_path.stem, f.read())
     
-def get_near_exports_from_file(file_path: str, module_name: str) -> set[str]:
+def get_near_exports_from_file(file_path: str) -> set[str]:
     with open(file_path, "r") as file:
         content = file.read()
         tree = ast.parse(content, filename=file_path)
@@ -833,7 +836,8 @@ def get_near_exports_from_file(file_path: str, module_name: str) -> set[str]:
     # Track custom decorators that eventually use near.export
     custom_exporters = set(["export", "view", "call", "init", "callback"])
     # Track functions that are exported
-    near_exports = defaultdict(list)
+    near_exports = []
+    near_optimizer_inputs = defaultdict(list)
     
     # First pass: identify custom decorators that use near.export
     for node in ast.walk(tree):
@@ -860,11 +864,11 @@ def get_near_exports_from_file(file_path: str, module_name: str) -> set[str]:
                 if ((isinstance(decorator, ast.Attribute) and isinstance(decorator.value, ast.Name) and 
                      decorator.value.id == "near" and decorator.attr == "export") or
                     (isinstance(decorator, ast.Name) and decorator.id == "near.export")):
-                    near_exports[f"{module_name}.{node.name}"] = []
+                    near_exports.append(node.name)
 
                 # Case 2: Using a custom exporter decorator like @init, @view, etc.
                 if isinstance(decorator, ast.Name) and decorator.id in custom_exporters:
-                    near_exports[f"{module_name}.{node.name}"] = []
+                    near_exports.append(node.name)
                     
                 # Case 3: @near.optimizer_inputs()
                 if isinstance(decorator, ast.Call) and decorator.args:
@@ -882,9 +886,9 @@ def get_near_exports_from_file(file_path: str, module_name: str) -> set[str]:
                                     value = json.dumps(elt.value).encode("utf-8")
                                 else:
                                     value = str(elt.value).encode("utf-8")
-                                near_exports[f"{module_name}.{node.name}"].append(value)
+                                near_optimizer_inputs[node.name].append(value)
                             
-    return near_exports
+    return near_exports, near_optimizer_inputs
 
 def get_binary_path(tool_name):
     if platform.system() == "Windows":
@@ -903,7 +907,7 @@ def run_tool(tool_name, args):
 def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", output_file="python-optimized.wasm", 
                        module_opt=True, function_opt="aggressive", compression=True, debug_info=True, 
                        pinned_functions=[], user_lib_dir = "lib", stdlib_zip=LIB_PATH / "python-stdlib.zip", 
-                       contract_exports=[], verify_optimized_wasm=True):
+                       contract_file="contract.py", contract_exports=[], verify_optimized_wasm=True, abi=None):
     build_path = Path(build_dir)
     wasm_path = Path(input_file)
     wat_path = build_path / "python.wat"
@@ -925,14 +929,37 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
         wasm_bytes = f.read()
 
     wasm_data = WasmDataStore()
-    add_frozen_modules(wasm_data, None, stdlib_zip, user_lib_dir)
+    add_frozen_modules(wasm_data, None, None, stdlib_zip, user_lib_dir)
+        
+    contract_path = Path(contract_file)
+    contract_pyc_path = contract_path.with_suffix(".pyc")
     
-    entry_points = dict()
+    entry_points = contract_exports
+    entry_point_test_inputs = defaultdict(list)
     
+    if len(contract_exports) == 0:
+        entry_points, entry_point_test_inputs = get_near_exports_from_file(contract_path)
+    elif abi is not None:
+        arg_test_values = {"string": ["", "An ascii string value", "此地无银三百两"], "integer": [0, -3, 10000000000000000], "bool": [True, False]}
+        for f in abi.get('body', {}).get('functions', {}):
+            name = f.get('name')
+            args = {}
+            for arg in f.get('params', {}).get('args', {}):
+                args[arg.get('name')] = arg.get('type_schema', {}).get('type', 'string')
+            test_args_sets = []
+            if len(args.keys()) > 0:
+                max_values = max(len(values) for values in arg_test_values.values())
+                test_args = [dict(zip(args.keys(), [arg_test_values[t][i % len(arg_test_values[t])] for t in args.values()]))
+                                for i in range(max_values)]
+                test_args_sets.extend(test_args)
+            entry_point_test_inputs[name] = [json.dumps(args_set).encode('utf-8') for args_set in test_args_sets]
+
+    print(f"contract {contract_file} entry points: {entry_points}")
+    print(f"contract {contract_file} entry point test inputs: {entry_point_test_inputs}")
+        
     compiler = WasmRunner(wasm_bytes)
     for path in Path(user_lib_dir).glob("**/*.py"):
         module_name = str(Path(path).relative_to(user_lib_dir).with_suffix('')).replace('/', '.')
-        entry_points.update({key: [] for key in contract_exports} if len(contract_exports) > 0 else get_near_exports_from_file(path, module_name))
         pyc_path = path.with_suffix(".pyc")
         print(f"compiling {path} to {pyc_path}..")
         with open(path, "r") as source_file:
@@ -940,12 +967,15 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
                 pyc_file.write(compile_to_bytecode(compiler, wasm_data, source_file.read(), path.name))
                 compiler.reset()
                 
-    print(f"entry points names: {list(entry_points.keys())}")
-    
+    print(f"compiling {contract_path} to {contract_pyc_path}..")
+    with open(contract_path, "r") as source_file:
+        with open(contract_pyc_path, "wb") as pyc_file:
+            pyc_file.write(compile_to_bytecode(compiler, wasm_data, source_file.read(), contract_path.name))
+            
     wasm_data = WasmDataStore()
-    add_frozen_modules(wasm_data, None, stdlib_zip, user_lib_dir)
+    add_frozen_modules(wasm_data, None, contract_pyc_path, stdlib_zip, user_lib_dir)
 
-    instrumented_wat = wasm_data.add_to_wat(instrument_wat(add_contract_entry_points_to_wat(wat, wasm_data, entry_points.keys())))
+    instrumented_wat = wasm_data.add_to_wat(instrument_wat(add_contract_entry_points_to_wat(wat, wasm_data, contract_pyc_path.stem, entry_points)))
     print(f"writing {instrumented_wat_path}..")
     write_sexp(instrumented_wat, instrumented_wat_path)
 
@@ -954,8 +984,8 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
     print(f"tracing called functions and loaded modules in {instrumented_wasm_path}..")
     with open(instrumented_wasm_path, "rb") as f:
         instrumented_wasm_bytes = f.read()
-        
-    called_function_name_hashes, loaded_frozen_modules, loaded_builtin_modules  = trace_wasm(WasmRunner(instrumented_wasm_bytes), entry_points)
+
+    called_function_name_hashes, loaded_frozen_modules, loaded_builtin_modules  = trace_wasm(WasmRunner(instrumented_wasm_bytes), entry_points, entry_point_test_inputs)
     print(f"loaded frozen/builtin modules: {loaded_frozen_modules}, {loaded_builtin_modules}")
     
     pinned_function_names = set(DEFAULT_PINNED_FUNCTIONS + pinned_functions)
@@ -1016,8 +1046,8 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
                 if fn not in removed_function_names:
                     f.write(f"{fn}\n")
 
-    add_frozen_modules(wasm_data, loaded_frozen_modules if module_opt else None, stdlib_zip, user_lib_dir)
-    modified_wat = wasm_data.add_to_wat(add_contract_entry_points_to_wat(wat, wasm_data, entry_points.keys()))
+    add_frozen_modules(wasm_data, loaded_frozen_modules if module_opt else None, contract_pyc_path, stdlib_zip, user_lib_dir)
+    modified_wat = wasm_data.add_to_wat(add_contract_entry_points_to_wat(wat, wasm_data, contract_pyc_path.stem, entry_points))
     
     modified_wat_path = build_path / "python-modified.wat"
     optimized_wasm_path = build_path / "python-optimized.wasm"
@@ -1048,7 +1078,7 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
         with open(final_wasm_path, "rb") as f:
             wasm_bytes = f.read()
         print(f"verifying optimized WASM at {final_wasm_path} ({len(wasm_bytes)} bytes)..")
-        trace_wasm(WasmRunner(wasm_bytes), entry_points)
+        trace_wasm(WasmRunner(wasm_bytes), entry_points, entry_point_test_inputs)
     
     print(f"copying optimized WASM to {Path(output_file).absolute()}")
     shutil.copy(final_wasm_path, Path(output_file).absolute())

@@ -1,5 +1,5 @@
 from .core import optimize_wasm_file
 
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 __all__ = ['optimize_wasm_file']

@@ -29,6 +29,7 @@ Optimizations:
 
 from pathlib import Path
 import argparse
+import json
 from .core import optimize_wasm_file, BINARY_PATH, LIB_PATH
 
 def resolve_defaults(args):
@@ -49,7 +50,8 @@ def resolve_defaults(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.strip(), formatter_class=argparse.RawDescriptionHelpFormatter)
     
-    parser.add_argument('build_dir', nargs='?', default='build', help='Build directory (default: build)')
+    parser.add_argument('contract_file', nargs='?', default='contract.py', help='Contract file path (default: contract.py)')
+    parser.add_argument('--build-dir', default='build', help='Build directory (default: build)')
     parser.add_argument('-i', '--input-file', default=LIB_PATH / 'python.wasm', help='Input WASM file name (default: embedded python.wasm)')
     parser.add_argument('-o', '--output-file', default='python-optimized.wasm', help='Output WASM file name (default: python-optimized.wasm)')
     parser.add_argument('-l', '--user-lib-dir', default='lib', help='User Python library directory (default: lib)')
@@ -68,15 +70,21 @@ def main():
     parser.add_argument('--verify-optimized-wasm', type=bool_arg, default=True, help='Run/verify optimized WASM after building (1/0)')    
     parser.add_argument('-p', '--pinned-functions', help='Comma-separated list of function names to pin (case-sensitive)')
     parser.add_argument('-e', '--exports', help='Comma-separated list of function names to be exported from the WASM (will be auto-detected via @near.export search if omitted)')
+    parser.add_argument('--abi-file', help='NEAR ABI file name, will be used to generate contract method test cases if present')
         
     args = resolve_defaults(parser.parse_args())
     args.pinned_functions = [f.strip() for f in (args.pinned_functions or '').split(',') if f.strip()]
     args.exports = [f.strip() for f in (args.exports or '').split(',') if f.strip()]
     
+    abi = None
+    if args.abi_file:
+      with open(args.abi_file, "r") as f:
+        abi = json.loads(f.read())
+    
     optimize_wasm_file(args.build_dir, args.input_file, args.output_file, module_opt=args.module_tracing, 
                        function_opt=args.function_tracing, compression=args.compression, debug_info=args.debug_info,
                        pinned_functions=args.pinned_functions, user_lib_dir=args.user_lib_dir, stdlib_zip=args.python_stdlib_zip,
-                       contract_exports=args.exports, verify_optimized_wasm=args.verify_optimized_wasm)
+                       contract_file=args.contract_file, contract_exports=args.exports, verify_optimized_wasm=args.verify_optimized_wasm, abi=abi)
 
 if __name__ == "__main__":
     main()
