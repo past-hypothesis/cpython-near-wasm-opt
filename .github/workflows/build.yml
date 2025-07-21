@@ -42,7 +42,7 @@ jobs:
         elif [ "${{ matrix.platform }}" = "macos_x86_64" ]; then
           PLATFORM_TAG="macosx_10_9_x86_64"
         elif [ "${{ matrix.platform }}" = "macos_arm64" ]; then
-          PLATFORM_TAG="macosx_10_9_arm64"
+          PLATFORM_TAG="macosx_11_0_arm64"
         elif [ "${{ matrix.platform }}" = "windows" ]; then
           PLATFORM_TAG="win_amd64"
         fi
