@@ -744,7 +744,7 @@ class WasmDataStore:
         self.packed_strings_cache = dict()
         
     def add_frozen_module(self, path: str, bytecode: bytes):
-        print(f"add_frozen_module(): including {path}")
+        # print(f"add_frozen_module(): including {path}")
         self.frozen_modules.append((path, bytecode))
         
     def allocate_string(self, value: str):
@@ -762,13 +762,15 @@ class WasmDataStore:
         alloc_offset = self.STRINGS_OFFSET + len(self.packed_strings)
         frozen_module_index = 0
         for (path, bytecode) in self.frozen_modules:
-            data[frozen_module_index * self.FROZEN_MODULE_HEADER_LENGTH:(frozen_module_index + 1) * self.FROZEN_MODULE_HEADER_LENGTH] = struct.pack('<L', self.BASE_ADDR + alloc_offset) + struct.pack('<L', len(bytecode)) + path.encode("utf-8").ljust(self.FROZEN_MODULE_MAX_PATH_LENGTH, b'\0')  
+            data[frozen_module_index * self.FROZEN_MODULE_HEADER_LENGTH:(frozen_module_index + 1) * self.FROZEN_MODULE_HEADER_LENGTH] = struct.pack('<L', self.BASE_ADDR + alloc_offset) + struct.pack('<L', len(bytecode)) + path.encode("utf-8").ljust(self.FROZEN_MODULE_MAX_PATH_LENGTH, b'\0')
             assert(len(path.encode("utf-8")) < self.FROZEN_MODULE_MAX_PATH_LENGTH)
             data[alloc_offset:alloc_offset + len(bytecode)] = bytecode
             alloc_offset += len(bytecode)
             frozen_module_index += 1
         assert(alloc_offset < self.MAX_ADDR)
         del data[alloc_offset:]
+        if len(self.frozen_modules) < 100:
+            print(f"included frozen modules: {', '.join([path for (path, _) in self.frozen_modules])}")
         return bytes(data)
     
     def add_to_wasm_runner(self, wasm_runner: WasmRunner):
@@ -821,7 +823,7 @@ def add_frozen_modules(wasm_data: WasmDataStore, pinned_module_paths, contract_p
                 wasm_data.add_frozen_module(frozen_path, zip_file.read(info.filename))
     if user_lib_path:
         for path in Path(user_lib_path).glob("**/*.pyc"):
-            frozen_path = str(path.relative_to(user_lib_path))
+            frozen_path = str(path.relative_to(user_lib_path)).replace('\\', '/')
             if should_include_lib_path(pinned_module_paths, frozen_path):
                 with open(path, "rb") as f:
                     wasm_data.add_frozen_module(frozen_path, f.read())
@@ -960,15 +962,14 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
         
     compiler = WasmRunner(wasm_bytes)
     for path in Path(user_lib_dir).glob("**/*.py"):
-        module_name = str(Path(path).relative_to(user_lib_dir).with_suffix('')).replace('/', '.').replace('\\', '.')
         pyc_path = path.with_suffix(".pyc")
-        print(f"compiling {path} to {pyc_path}..")
+        # print(f"compiling {path} to {pyc_path}..")
         with open(path, "r") as source_file:
             with open(pyc_path, "wb") as pyc_file:
                 pyc_file.write(compile_to_bytecode(compiler, wasm_data, source_file.read(), path.name))
                 compiler.reset()
                 
-    print(f"compiling {contract_path} to {contract_pyc_path}..")
+    # print(f"compiling {contract_path} to {contract_pyc_path}..")
     with open(contract_path, "r") as source_file:
         with open(contract_pyc_path, "wb") as pyc_file:
             pyc_file.write(compile_to_bytecode(compiler, wasm_data, source_file.read(), contract_path.name))
@@ -987,7 +988,8 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
         instrumented_wasm_bytes = f.read()
 
     called_function_name_hashes, loaded_frozen_modules, loaded_builtin_modules  = trace_wasm(WasmRunner(instrumented_wasm_bytes), entry_points, entry_point_test_inputs)
-    print(f"loaded frozen/builtin modules: {loaded_frozen_modules}, {loaded_builtin_modules}")
+    print(f"loaded builtin modules: {loaded_builtin_modules}")
+    print(f"loaded frozen modules: {loaded_frozen_modules}")
     
     pinned_function_names = set(DEFAULT_PINNED_FUNCTIONS + pinned_functions)
     
