@@ -960,7 +960,7 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
         
     compiler = WasmRunner(wasm_bytes)
     for path in Path(user_lib_dir).glob("**/*.py"):
-        module_name = str(Path(path).relative_to(user_lib_dir).with_suffix('')).replace('/', '.')
+        module_name = str(Path(path).relative_to(user_lib_dir).with_suffix('')).replace('/', '.').replace('\\', '.')
         pyc_path = path.with_suffix(".pyc")
         print(f"compiling {path} to {pyc_path}..")
         with open(path, "r") as source_file:
