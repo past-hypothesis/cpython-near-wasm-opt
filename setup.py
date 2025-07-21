@@ -41,7 +41,7 @@ class CustomBuild(build):
             if system == "darwin":
                 system = "macos"
             elif system == "windows":
-                system = "win32"
+                system = "windows"
             else:
                 system = "linux"
 
