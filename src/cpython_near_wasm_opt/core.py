@@ -744,6 +744,7 @@ class WasmDataStore:
         self.packed_strings_cache = dict()
         
     def add_frozen_module(self, path: str, bytecode: bytes):
+        print(f"add_frozen_module(): including {path}")
         self.frozen_modules.append((path, bytecode))
         
     def allocate_string(self, value: str):
@@ -818,15 +819,15 @@ def add_frozen_modules(wasm_data: WasmDataStore, pinned_module_paths, contract_p
             frozen_path = info.filename.lstrip('/')
             if not info.is_dir() and frozen_path.endswith('.pyc') and should_include_lib_path(pinned_module_paths, frozen_path):
                 wasm_data.add_frozen_module(frozen_path, zip_file.read(info.filename))
-    for path in Path(user_lib_path).glob("**/*.pyc"):
-        frozen_path = str(path.relative_to(user_lib_path))
-        if should_include_lib_path(pinned_module_paths, frozen_path):
-            print(f"add_frozen_modules_from_dir(): including {path}, rel_path: {frozen_path}")
-            with open(path, "rb") as f:
-                wasm_data.add_frozen_module(frozen_path, f.read())
+    if user_lib_path:
+        for path in Path(user_lib_path).glob("**/*.pyc"):
+            frozen_path = str(path.relative_to(user_lib_path))
+            if should_include_lib_path(pinned_module_paths, frozen_path):
+                with open(path, "rb") as f:
+                    wasm_data.add_frozen_module(frozen_path, f.read())
     if contract_pyc_path:
-        with open(path, "rb") as f:
-            wasm_data.add_frozen_module(contract_pyc_path.stem, f.read())
+        with open(contract_pyc_path, "rb") as f:
+            wasm_data.add_frozen_module(contract_pyc_path.name, f.read())
     
 def get_near_exports_from_file(file_path: str) -> set[str]:
     with open(file_path, "r") as file:
@@ -929,7 +930,7 @@ def optimize_wasm_file(build_dir="build", input_file=LIB_PATH / "python.wasm", o
         wasm_bytes = f.read()
 
     wasm_data = WasmDataStore()
-    add_frozen_modules(wasm_data, None, None, stdlib_zip, user_lib_dir)
+    add_frozen_modules(wasm_data, None, None, stdlib_zip, None)
         
     contract_path = Path(contract_file)
     contract_pyc_path = contract_path.with_suffix(".pyc")
