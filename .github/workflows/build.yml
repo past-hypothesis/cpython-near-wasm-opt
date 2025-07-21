@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [linux, macos, windows]
+        platform: [linux, macos_x86_64, macos_arm64, windows]
         
     steps:
     - uses: actions/checkout@v4
@@ -39,8 +39,10 @@ jobs:
         PLATFORM_TAG=""
         if [ "${{ matrix.platform }}" = "linux" ]; then
           PLATFORM_TAG="manylinux1_x86_64"
-        elif [ "${{ matrix.platform }}" = "macos" ]; then
+        elif [ "${{ matrix.platform }}" = "macos_x86_64" ]; then
           PLATFORM_TAG="macosx_10_9_x86_64"
+        elif [ "${{ matrix.platform }}" = "macos_arm64" ]; then
+          PLATFORM_TAG="macosx_10_9_arm64"
         elif [ "${{ matrix.platform }}" = "windows" ]; then
           PLATFORM_TAG="win_amd64"
         fi

@@ -14,7 +14,8 @@ CPYTHON_NEAR_VERSION = os.environ.get("CPYTHON_NEAR_VERSION", "v3.13.5-near")
 BINARYEN_VERSION = os.environ.get("BINARYEN_VERSION", "123")
 BINARYEN_PLATFORM_MAP = {
     "linux": ("x86_64-linux", "tar.gz"),
-    "macos": ("x86_64-macos", "tar.gz"),
+    "macos_x86_64": ("x86_64-macos", "tar.gz"),
+    "macos_arm64": ("arm64-macos", "tar.gz"),
     "windows": ("x86_64-windows", "tar.gz"),
 }
 
@@ -39,7 +40,7 @@ class CustomBuild(build):
         else:
             system = platform.system().lower()
             if system == "darwin":
-                system = "macos"
+                system = f"macos_{platform.machine().lower()}"
             elif system == "windows":
                 system = "windows"
             else:
@@ -76,7 +77,7 @@ class CustomBuild(build):
                         with zip_file.open(name) as src, open(bin_dir / os.path.basename(name), "wb") as dst:
                             shutil.copyfileobj(src, dst)
         
-        if system in ["linux", "macos"]:
+        if system not in ["windows"]:
             for binary in bin_dir.glob("wasm-*"):
                 binary.chmod(0o755)
         
