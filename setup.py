@@ -19,20 +19,21 @@ BINARYEN_PLATFORM_MAP = {
     "windows": ("x86_64-windows", "tar.gz"),
 }
 
+
 class CustomBuild(build):
     def run(self):
         bin_dir = Path("src/cpython_near_wasm_opt/bin")
         lib_dir = Path("src/cpython_near_wasm_opt/lib")
-        for dir in (bin_dir, lib_dir):            
+        for dir in (bin_dir, lib_dir):
             if dir.exists():
                 shutil.rmtree(dir)
             dir.mkdir(parents=True, exist_ok=True)
 
         self.download_binaryen(bin_dir, lib_dir)
         self.download_cpython(lib_dir)
-        
+
         super().run()
-        
+
     def download_binaryen(self, bin_dir, lib_dir):
         build_platform = os.environ.get("BUILD_PLATFORM")
         if build_platform:
@@ -49,18 +50,25 @@ class CustomBuild(build):
         build_dir = Path("build")
         if build_dir.exists():
             shutil.rmtree(build_dir)
-        
+
         if system not in BINARYEN_PLATFORM_MAP:
             raise RuntimeError(f"Unsupported platform: {system}")
 
         platform_name, ext = BINARYEN_PLATFORM_MAP[system]
         url = f"https://github.com/WebAssembly/binaryen/releases/download/version_{BINARYEN_VERSION}/binaryen-version_{BINARYEN_VERSION}-{platform_name}.{ext}"
-        
+
         archive_path = f"binaryen.{ext}"
         print(f"Downloading {url}...")
         urlretrieve(url, archive_path)
-        
-        binary_name_suffixes = ("wasm-dis", "wasm-as", "wasm-opt", "wasm-dis.exe", "wasm-as.exe", "wasm-opt.exe")
+
+        binary_name_suffixes = (
+            "wasm-dis",
+            "wasm-as",
+            "wasm-opt",
+            "wasm-dis.exe",
+            "wasm-as.exe",
+            "wasm-opt.exe",
+        )
         if ext == "tar.gz":
             with tarfile.open(archive_path, "r:gz") as tar:
                 for member in tar.getmembers():
@@ -74,29 +82,35 @@ class CustomBuild(build):
             with zipfile.ZipFile(archive_path, "r") as zip_file:
                 for name in zip_file.namelist():
                     if name.endswith(binary_name_suffixes):
-                        with zip_file.open(name) as src, open(bin_dir / os.path.basename(name), "wb") as dst:
+                        with (
+                            zip_file.open(name) as src,
+                            open(bin_dir / os.path.basename(name), "wb") as dst,
+                        ):
                             shutil.copyfileobj(src, dst)
-        
+
         if system not in ["windows"]:
             for binary in bin_dir.glob("wasm-*"):
                 binary.chmod(0o755)
-        
-        os.remove(archive_path)
 
+        os.remove(archive_path)
 
     def download_cpython(self, lib_dir):
         url = f"https://github.com/past-hypothesis/cpython-near/releases/download/{CPYTHON_NEAR_VERSION}/python-wasm-near-{CPYTHON_NEAR_VERSION}.zip"
- 
+
         archive_path = f"python-wasm-near-{CPYTHON_NEAR_VERSION}.zip"
         print(f"Downloading {url}...")
         urlretrieve(url, archive_path)
-        
+
         with zipfile.ZipFile(archive_path, "r") as zip_file:
             for name in zip_file.namelist():
-                with zip_file.open(name) as src, open(lib_dir / os.path.basename(name), "wb") as dst:
+                with (
+                    zip_file.open(name) as src,
+                    open(lib_dir / os.path.basename(name), "wb") as dst,
+                ):
                     shutil.copyfileobj(src, dst)
 
         os.remove(archive_path)
+
 
 setup(
     cmdclass={"build": CustomBuild},
