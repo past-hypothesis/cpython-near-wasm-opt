@@ -152,7 +152,7 @@ def main():
     if args.abi_file:
         with open(args.abi_file, "r") as f:
             abi = json.loads(f.read())
-
+            
     optimize_wasm_file(
         args.build_dir,
         args.input_file,

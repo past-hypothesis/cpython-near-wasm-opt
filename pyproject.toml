@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cpython-near-wasm-opt"
-version = "0.8.8"
+version = "0.8.9"
 description = "CPython-NEAR WASM optimizer tool"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,3 +22,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 cpython_near_wasm_optimizer = ["bin/**/*", "lib/**/*"]
+

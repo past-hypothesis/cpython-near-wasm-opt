@@ -15,6 +15,7 @@ import wasmtime
 
 BINARY_PATH = Path(__file__).parent / "bin"
 LIB_PATH = Path(__file__).parent / "lib"
+CONTRACT_MODULE_PREFIX = "__near_contract__"
 
 DEFAULT_PINNED_FUNCTIONS = [
     "_Py_Dealloc",
@@ -1273,13 +1274,13 @@ def compress_wasm_data_initializer(wat):
 class WasmDataStore:
     BASE_ADDR = 1048576
     MAX_ADDR = 8388608
-    FROZEN_MODULE_HEADER_LENGTH = 64
-    FROZEN_MODULE_MAX_PATH_LENGTH = 56
+    FROZEN_MODULE_HEADER_LENGTH = 256
+    FROZEN_MODULE_MAX_PATH_LENGTH = 248
     MAX_FROZEN_MODULES = 512
     STRINGS_OFFSET = FROZEN_MODULE_HEADER_LENGTH * MAX_FROZEN_MODULES
 
     # memory layout:
-    #   BASE_ADDR: <frozen module header:64 bytes> * MAX_FROZEN_MODULES (currently 64k - 1024)
+    #   BASE_ADDR: <frozen module header:256 bytes> * MAX_FROZEN_MODULES
     #              <allocated null-terminated strings>
     #              <frozen module data chunks linked from the header>
     #              ...
@@ -1288,7 +1289,7 @@ class WasmDataStore:
     # frozen module header (64 bytes):
     #   data addr:4 bytes (le)
     #   data length:4 bytes (le)
-    #   path: 56 bytes (null-terminated)
+    #   path: 248 bytes (null-terminated)
     #   both data addr and size fields is a empty header/end of valid headers marker
 
     def __init__(self):
@@ -1445,7 +1446,7 @@ def add_frozen_modules(
                     wasm_data.add_frozen_module(frozen_path, f.read())
     if contract_pyc_path:
         with open(contract_pyc_path, "rb") as f:
-            wasm_data.add_frozen_module(contract_pyc_path.name, f.read())
+            wasm_data.add_frozen_module(CONTRACT_MODULE_PREFIX + contract_pyc_path.name, f.read())
 
 
 def get_near_exports_from_file(file_path: str) -> set[str]:
@@ -1656,7 +1657,7 @@ def optimize_wasm_file(
     instrumented_wat = wasm_data.add_to_wat(
         instrument_wat(
             add_contract_entry_points_to_wat(
-                wat, wasm_data, contract_pyc_path.stem, entry_points
+                wat, wasm_data, CONTRACT_MODULE_PREFIX + contract_pyc_path.stem, entry_points
             )
         )
     )
@@ -1781,7 +1782,7 @@ def optimize_wasm_file(
     )
     modified_wat = wasm_data.add_to_wat(
         add_contract_entry_points_to_wat(
-            wat, wasm_data, contract_pyc_path.stem, entry_points
+            wat, wasm_data, CONTRACT_MODULE_PREFIX + contract_pyc_path.stem, entry_points
         )
     )
 
