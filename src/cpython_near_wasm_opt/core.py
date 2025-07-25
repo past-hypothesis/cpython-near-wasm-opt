@@ -13,233 +13,18 @@ from pathlib import Path
 import lz4.frame
 import wasmtime
 
+from .defaults import (
+    BUILTIN_MODULE_FUNCTION_NAME_PREFIXES,
+    DEFAULT_PINNED_FUNCTIONS,
+    SAFE_PINNED_FUNCTIONS,
+    SAFELY_REMOVABLE_FUNCTION_NAME_PREFIXES,
+    SAFELY_REMOVABLE_FUNCTION_NAME_SUFFIXES,
+)
+
 BINARY_PATH = Path(__file__).parent / "bin"
 LIB_PATH = Path(__file__).parent / "lib"
 CONTRACT_MODULE_PREFIX = "__near_contract__"
 
-DEFAULT_PINNED_FUNCTIONS = [
-    "_Py_Dealloc",
-    "PyObject_ClearWeakRefs",
-    "PyObject_ClearManagedDict",
-    "clear_inline_values",
-    "is_basic_ref_or_proxy",
-    "_PyWeakref_GetWeakrefCount",
-    "set_len",
-    "_weakref__remove_dead_weakref",
-    "is_dead_weakref",
-    "clear_slots",
-    "PyObject_DelItem",
-    "lock_dealloc",
-    "_PySuper_Lookup",
-    "wrapperdescr_call",
-    "_PyObject_RealIsSubclass",
-    "recursive_issubclass",
-    "Py_Exit",
-    "exit",
-    "close_file",
-    "_Exit",
-    "__wasi_proc_exit",
-    "setvbuf",
-    "_PyErr_NoMemory",
-    "optimized_out_function_panic_handler",
-    "snprintf",
-    "log_utf8_c",
-    "strlen",
-    "log_utf8",
-    "abort",
-    "decompress_data_initializer",
-    "pymain_init",
-    "_Py_GetErrorHandler",
-    "siprintf",
-    "vfiprintf",
-    "iprintf",
-    # these are necessary for exception/traceback printing (~8KiB WASM size impact)
-    "PyErr_SetString",
-    "_PyErr_SetString",
-    "BaseException_vectorcall",
-    "PyErr_PrintEx",
-    "_PyErr_PrintEx",
-    "handle_system_exit",
-    "_PySys_GetOptionalAttr",
-    "_PySys_Audit",
-    "cfunction_vectorcall_FASTCALL",
-    "sys_excepthook",
-    "PyErr_Display",
-    "_PyErr_Display",
-    "PyImport_ImportModuleAttrString",
-    "PyImport_ImportModuleAttr",
-    "_PyErr_Format",
-    "meth_repr",
-    "puts",
-    "fputs",
-    "fwrite",
-    "__overflow",
-    "BaseException_dealloc",
-    "PySet_New",
-    "PySet_Add",
-    "print_exception_recursive",
-    "_Py_EnterRecursiveCall",
-    "PyException_GetCause",
-    "PyException_GetContext",
-    "PyObject_GetOptionalAttr",
-    "_Py_type_getattro",
-    "_Py_type_getattro_impl",
-    "PyDescr_IsData",
-    "getset_get",
-    "type_get_module",
-    "PyType_GetQualName",
-    "PyFile_WriteObject",
-    "PyObject_GenericGetAttr",
-    "method_get",
-    "stdprinter_write",
-    "_Py_write",
-    "_Py_write_impl",
-    "_PySys_SetAttr",
-    "PyEval_SaveThread",
-    "_PyThreadState_Detach",
-    "detach_thread",
-    "_PyEval_ReleaseLock",
-    "drop_gil",
-    "drop_gil_impl",
-    "write",
-    "PyEval_RestoreThread",
-    "BaseException_str",
-    "PyUnicode_GetLength",
-    "PyFile_WriteString",
-    "set_dealloc",
-    "_PyFile_Flush",
-    "PyObject_CallMethodNoArgs",
-    "PyObject_VectorcallMethod",
-    "method_vectorcall_NOARGS",
-]
-
-BUILTIN_MODULE_FUNCTION_NAME_PREFIXES = {
-    "array": ["array"],
-    "_bisect": ["_bisect"],
-    "_contextvars": ["_contextvars"],
-    "_heapq": ["_heapq"],
-    "_json": ["_json"],
-    "_queue": ["_queue"],
-    "_random": ["_random"],
-    "_struct": ["Struct_", "unpackiter_"],
-    "math": ["math"],
-    "cmath": ["cmath"],
-    "_statistics": ["_statistics"],
-    "_decimal": ["_decimal"],
-    "binascii": ["binascii"],
-    "_md5": [
-        "md5_",
-        "MD5_",
-        "MD5Type_",
-        "Hacl_Hash_MD5",
-        "python_hashlib_Hacl_Hash_MD5",
-    ],
-    "_sha1": ["_sha1", "SHA1", "Hacl_Hash_SHA1", "python_hashlib_Hacl_Hash_SHA1"],
-    "_sha2": [
-        "_sha2",
-        "SHA2",
-        "SHA256",
-        "SHA512",
-        "Hacl_Hash_SHA2",
-        "python_hashlib_Hacl_Hash_SHA2",
-    ],
-    "_sha3": [
-        "_sha3",
-        "SHA3",
-        "py_sha3",
-        "Hacl_Hash_SHA3",
-        "python_hashlib_Hacl_Hash_SHA3",
-    ],
-    "termios": ["termios"],
-    "atexit": ["atexit"],
-    "faulthandler": ["faulthandler"],
-    "posix": ["posix"],
-    "_signal": ["_signal_", "signal_", "signaldict"],
-    "_codecs": ["_codecs"],
-    "_collections": ["_collections"],
-    "errno": ["errno"],
-    "_io": ["_io"],
-    "itertools": ["itertools"],
-    "_sre": ["_sre_", "sre_"],
-    "_sysconfig": ["_sysconfig"],
-    "_thread": ["_thread"],
-    "time": ["time", "pytime"],
-    "_typing": ["_typing"],
-    "_weakref": ["_weakref"],
-    "_abc": ["_abc"],
-    "_functools": ["_functools"],
-    "_operator": ["_operator"],
-    "marshal": ["marshal_", "PyMarshal_"],
-    "_ast": [
-        "_PyAST",
-        "PyAST",
-        "obj2ast",
-        "ast2obj",
-        "_ast",
-        "ast_",
-        "astfold_",
-        "astmodule_",
-    ],
-    "_asyncio": ["_asyncio", "task_", "Task", "FutureIter"],
-    "_tokenize": ["_tokenize", "tokenize"],
-    "_warnings": ["_PyWarnings"],
-    "_string": ["_string", "_PyUnicode", "PyUnicode", "unicode"],
-}
-
-SAFELY_REMOVABLE_FUNCTION_NAME_PREFIXES = [
-    "_complex",
-    "complex_",
-    "PyComplex",
-    "ucs4lib",
-    "ucs2lib",
-    "anextawaitable_",
-    "coro_",
-    "async_",
-    "gen_",
-    "ag_",
-    "SyntaxError",
-    "compiler",
-    "_PyPegen",
-    "_Pypegen",
-    "_PyTokenizer",
-    "_PyLexer",
-    "builtin_compile",
-    "_parser",
-    "_PyParser",
-    "InstructionSequence",
-    "_PyInstructionSequence",
-    "code_",
-    "_PyCode",
-    "_PyCompile",
-    "PyCompile",
-    "Py_Compile",
-    "assemble_",
-    "PyEval",
-    "_PyEval",
-    "builtin_eval",
-    "validate_",
-    "_PyMem_Debug",
-    "_Py_Dump",
-    "PySys",
-    "PyOS",
-    "OSError_",
-    "oserror_",
-    "symtable_",
-    "PySymtable_",
-    "_PySymtable",
-    "sys_trace",
-    "_PyMonitoring",
-    "monitoring",
-    "force_instrument",
-    "_Py_call_instr",
-    "_Py_Instr",
-    "_start",
-    "PyPickle",
-    "pickle",
-    "xml",
-]
-
-SAFELY_REMOVABLE_FUNCTION_NAME_SUFFIXES = ["_rule"]
 
 _LPAREN = object()
 _RPAREN = object()
@@ -1446,7 +1231,9 @@ def add_frozen_modules(
                     wasm_data.add_frozen_module(frozen_path, f.read())
     if contract_pyc_path:
         with open(contract_pyc_path, "rb") as f:
-            wasm_data.add_frozen_module(CONTRACT_MODULE_PREFIX + contract_pyc_path.name, f.read())
+            wasm_data.add_frozen_module(
+                CONTRACT_MODULE_PREFIX + contract_pyc_path.name, f.read()
+            )
 
 
 def get_near_exports_from_file(file_path: str) -> set[str]:
@@ -1549,7 +1336,7 @@ def optimize_wasm_file(
     input_file=LIB_PATH / "python.wasm",
     output_file="python-optimized.wasm",
     module_opt=True,
-    function_opt="aggressive",
+    function_opt="aggressive",  # valid values: "aggressive", "safe", "safest", "off"
     compression=True,
     debug_info=True,
     pinned_functions=[],
@@ -1598,7 +1385,7 @@ def optimize_wasm_file(
             "string": ["", "An ascii string value", "此地无银三百两"],
             "integer": [0, -3, 10000000000000000],
             "boolean": [True, False],
-            "object": [{}, None]
+            "object": [{}, None],
         }
         for f in abi.get("body", {}).get("functions", {}):
             name = f.get("name")
@@ -1658,7 +1445,10 @@ def optimize_wasm_file(
     instrumented_wat = wasm_data.add_to_wat(
         instrument_wat(
             add_contract_entry_points_to_wat(
-                wat, wasm_data, CONTRACT_MODULE_PREFIX + contract_pyc_path.stem, entry_points
+                wat,
+                wasm_data,
+                CONTRACT_MODULE_PREFIX + contract_pyc_path.stem,
+                entry_points,
             )
         )
     )
@@ -1691,6 +1481,9 @@ def optimize_wasm_file(
 
     pinned_function_names = set(DEFAULT_PINNED_FUNCTIONS + pinned_functions)
 
+    if function_opt in ("safe", "safest"):
+        pinned_function_names.update(SAFE_PINNED_FUNCTIONS)
+
     pinned_function_name_hashes = set()
     pinned_function_name_hashes = pinned_function_name_hashes.union(
         {fnv1a_32(s.strip()) for s in pinned_function_names}
@@ -1706,9 +1499,9 @@ def optimize_wasm_file(
     ]
 
     def removing_function_allowed(func_name):
-        if function_opt == "aggressive":
+        if function_opt in ("aggressive", "safe"):
             return True
-        elif function_opt == "safe":
+        elif function_opt == "safest":
             for prefix in (
                 SAFELY_REMOVABLE_FUNCTION_NAME_PREFIXES
                 + non_loaded_builtin_modules_removable_function_name_prefixes
@@ -1783,7 +1576,10 @@ def optimize_wasm_file(
     )
     modified_wat = wasm_data.add_to_wat(
         add_contract_entry_points_to_wat(
-            wat, wasm_data, CONTRACT_MODULE_PREFIX + contract_pyc_path.stem, entry_points
+            wat,
+            wasm_data,
+            CONTRACT_MODULE_PREFIX + contract_pyc_path.stem,
+            entry_points,
         )
     )
 

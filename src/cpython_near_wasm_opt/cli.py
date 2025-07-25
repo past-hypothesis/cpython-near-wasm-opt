@@ -38,9 +38,10 @@ def resolve_defaults(args):
     defaults = {
         0: [False, "off", False, True],
         1: [True, "off", True, True],
-        2: [True, "safe", True, True],
-        3: [True, "aggressive", True, True],
-        4: [True, "aggressive", True, False],
+        2: [True, "safest", True, True],
+        3: [True, "safe", True, True],
+        4: [True, "aggressive", True, True],
+        5: [True, "aggressive", True, False],
     }[args.opt_level]
 
     args.module_tracing = (
@@ -96,8 +97,8 @@ def main():
         "--opt-level",
         type=int,
         default=3,
-        choices=[0, 1, 2, 3, 4],
-        help="Optimization level 0-4 (default: 3)",
+        choices=[0, 1, 2, 3, 4, 5],
+        help="Optimization level 0-5 (default: 3)",
     )
 
     def bool_arg(v):
