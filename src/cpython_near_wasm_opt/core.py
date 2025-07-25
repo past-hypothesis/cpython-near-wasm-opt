@@ -1597,8 +1597,8 @@ def optimize_wasm_file(
         arg_test_values = {
             "string": ["", "An ascii string value", "此地无银三百两"],
             "integer": [0, -3, 10000000000000000],
-            "bool": [True, False],
-            "object": [{}, None]
+            "boolean": [True, False],
+            "object": [b'8427641258172598372653', None]
         }
         for f in abi.get("body", {}).get("functions", {}):
             name = f.get("name")
